@@ -30,7 +30,7 @@ def preprocess_data(dat,prop='',model='gpt2'):#, model_name):
     #tokenizer = AutoTokenizer.from_pretrained(model_name)
     tokenizer = AutoTokenizer.from_pretrained(model)
     #model = AutoModelForSequenceClassification.from_pretrained(model_name)
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # device = torch.device("cpu")
     model = GPT2Model.from_pretrained(model)
     model.to(device)

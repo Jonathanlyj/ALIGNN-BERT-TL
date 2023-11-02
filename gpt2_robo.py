@@ -12,7 +12,7 @@ from jarvis.io.vasp.inputs import Poscar
 from jarvis.db.figshare import data
 from sklearn.ensemble import RandomForestRegressor
 import matplotlib.pyplot as plt
-from chemnlp.utils.describe import atoms_describer
+from chemnlp.chemnlp.utils.describe import atoms_describer
 # Load JSON data
 
 from pymatgen.core.structure import Structure
@@ -69,8 +69,8 @@ def preprocess_data(dat,prop='',model='gpt2'):#, model_name):
         #embeddings.append(output.last_hidden_state.mean(dim=1).numpy())
         #embeddings.append(output.last_hidden_state.mean(dim=1).numpy())
      except Exception as exp:
-           print ('exp',exp,text,len(text))
-           pass
+        print ('exp',exp)
+        pass
 
     embeddings = np.vstack(embeddings)
     #labels = np.array([entry['exfoliation_energy'] for entry in dat])
