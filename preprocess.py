@@ -3,7 +3,7 @@
 import json
 import numpy as np
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from transformers import AutoTokenizer, GPT2Model, BertModel
+from transformers import AutoTokenizer, GPT2Model, BertModel, OPTModel
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, mean_squared_error
@@ -23,10 +23,8 @@ from chemnlp.chemnlp.utils.describe import atoms_describer
 from robocrys import StructureCondenser, StructureDescriber
 
 SEED = 1
-props = ['ehull','mbj_bandgap',
-       'slme', 'spillage', 'magmom_outcar',]
 
-parser = argparse.ArgumentParser(description='get embeddings on dataset',argument_default=argparse.SUPPRESS)
+parser = argparse.ArgumentParser(description='get embeddings on dataset')
 # parser.add_argument('--data_path', help='path to the dataset',default=None, type=str, required=False)
 parser.add_argument('--label', help='output variable', default=None, type=str,required=False)
 # parser.add_argument('--input', help='input attributes set', default=None, type=str, required=False)
@@ -34,7 +32,11 @@ parser.add_argument('--text', help='text sources for sample', choices=['raw', 'c
 parser.add_argument('--llm', help='pre-trained llm to use', default='gpt2', type=str,required=False)
 parser.add_argument('--output_dir', help='path to the save output embedding', default=None, type=str, required=False)
 parser.add_argument('--cache_csv', help='path that stores text', default=None, type=str, required=False)
+parser.add_argument('--cpu', action='store_true', help='use cpu only', required=False)
 args,_ = parser.parse_known_args()
+
+
+
 
 def get_robo(structure=None):
     describer = StructureDescriber()
@@ -44,7 +46,7 @@ def get_robo(structure=None):
     return description
 
 def preprocess_data(args):
-    dat = data('dft_3d')[30000:35000]
+    dat = data('dft_3d')
     dd = []
     if args.label:
         prop = args.label
@@ -59,11 +61,13 @@ def preprocess_data(args):
     llm = args.llm
     tokenizer = AutoTokenizer.from_pretrained(llm)
     #model = AutoModelForSequenceClassification.from_pretrained(model_name)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
     if "gpt2" in llm.lower():
         model = GPT2Model.from_pretrained(llm)
     elif "bert" in llm.lower():
         model = BertModel.from_pretrained(llm)
+    elif "opt" in llm.lower():
+        model = OPTModel.from_pretrained(llm)
 
     model.to(device)
     embeddings = []

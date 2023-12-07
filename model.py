@@ -23,8 +23,8 @@ from collections import defaultdict
 import configparser
 
 SEED = 1
-props = ['ehull','mbj_bandgap',
-       'slme', 'spillage', 'magmom_outcar']
+props = ['ehull','mbj_bandgap', 'slme', 'spillage', 'magmom_outcar','formation_energy_peratom', 'Tc_supercon']
+
 
 parser = argparse.ArgumentParser(description='run ml regressors on dataset')
 # parser.add_argument('--data_path', help='path to the dataset',default=None, type=str, required=False)
@@ -94,6 +94,8 @@ def run_regressor(args):
         result['prop'].append(prop)
         result['mae'].append(mae)
         result['mse'].append(mse)
+        df_pred = pd.DataFrame({'labels': y_test, 'predictions': y_pred})
+        df_pred.to_csv(f"./pred/rf_{args.llm}_{args.text}_{prop}.csv")
     df_rst = pd.DataFrame.from_dict(result)
     return df_rst
 

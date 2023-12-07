@@ -25,7 +25,7 @@ import logging
 
 
 warnings.filterwarnings("ignore", category=UserWarning)
-parser = argparse.ArgumentParser(description='get embeddings on dataset',argument_default=argparse.SUPPRESS)
+parser = argparse.ArgumentParser(description='get embeddings on dataset')
 # parser.add_argument('--data_path', help='path to the dataset',default=None, type=str, required=False)
 parser.add_argument('--start', default=0, type=int,required=False)
 # parser.add_argument('--input', help='input attributes set', default=None, type=str, required=False)
