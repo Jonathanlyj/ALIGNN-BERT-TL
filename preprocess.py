@@ -2,7 +2,8 @@
 #mean_absolute_error_formation_energy_peratom: 0.471877877532833
 import json
 import numpy as np
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import transformers
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoModelForCausalLM, BitsAndBytesConfig
 from transformers import AutoTokenizer, GPT2Model, BertModel, OPTModel
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
@@ -19,9 +20,10 @@ import logging
 import pandas as pd
 import os
 # import chemnlp
+# os.environ["CUDA_VISIBLE_DEVICES"]="0"
 from chemnlp.chemnlp.utils.describe import atoms_describer
 from robocrys import StructureCondenser, StructureDescriber
-
+print(transformers.__version__)
 SEED = 1
 
 parser = argparse.ArgumentParser(description='get embeddings on dataset')
@@ -67,8 +69,14 @@ def preprocess_data(args):
     elif "bert" in llm.lower():
         model = BertModel.from_pretrained(llm)
     elif "opt" in llm.lower():
-        model = OPTModel.from_pretrained(llm)
-
+        # model = OPTModel.from_pretrained(llm, load_in_8bit=True, device_map='auto')
+        quantization_config = BitsAndBytesConfig(load_in_8bit=True, llm_int8_enable_fp32_cpu_offload=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            "facebook/opt-6.7b", 
+            device_map='auto',
+            quantization_config=quantization_config
+        )
+    print(model.get_memory_footprint())
     model.to(device)
     embeddings = []
     samples=[]
@@ -96,7 +104,8 @@ def preprocess_data(args):
         inputs = tokenizer(text, return_tensors="pt").to(device)
         if len(inputs['input_ids'][0]) <= max_token_length:
             with torch.no_grad():
-                output = model(**inputs)
+                with torch.cuda.amp.autocast():
+                    output = model(**inputs)
             if device.type == 'cuda':
                 emb = output.last_hidden_state.mean(dim=1).cpu().numpy().flatten()
             else:
@@ -114,10 +123,12 @@ def save_data(embeddings, samples):
     n = len(embeddings)
     assert n == len(samples)
     df = pd.DataFrame(embeddings, index=samples)
-    file_path = f"embeddings_{args.llm}_{args.text}_{n}.csv"
+    file_path = f"embeddings_{args.llm.replace('/', '_')}_{args.text}_{n}.csv"
     if args.output_dir:
-        file_path = os.path.join(args.output_dir, file_path)  
+        file_path = os.path.join(args.output_dir, file_path) 
     df.to_csv(file_path)
+    logging.info(f"Saved to {file_path}")
+
 
 
 
@@ -126,4 +137,5 @@ if __name__ == "__main__":
     embeddings, samples = preprocess_data(args)
     logging.info(f"Finished generate embeddings")
     save_data(embeddings, samples)
+    
 

@@ -21,8 +21,10 @@ import os
 import pandas as pd
 from collections import defaultdict
 import configparser
+from .features import prepare_dataset
 
 SEED = 1
+#props = ['ehull','mbj_bandgap', 'slme', 'spillage', 'magmom_outcar','formation_energy_peratom', 'Tc_supercon']
 props = ['ehull','mbj_bandgap', 'slme', 'spillage', 'magmom_outcar','formation_energy_peratom', 'Tc_supercon']
 
 
@@ -35,34 +37,16 @@ parser.add_argument('--llm', help='pre-trained llm to use', default='gpt2', type
 parser.add_argument('--output_dir', help='path to the save output embedding', default=None, type=str, required=False)
 parser.add_argument('--label', help='target variable', default=None, type=str,required=False)
 parser.add_argument('--raw', action='store_true')
-
+parser.add_argument('--no_save', action='store_true')
+parser.add_argument('--save_data', action='store_true')
+parser.add_argument('--data_only', action='store_true')
 args =  parser.parse_args()
 config = configparser.ConfigParser()
 config.read('config.ini')
 
-def in_range(val, prop):
-    upper = float(config[f'prop:{prop}']['upper'])
-    lower = float(config[f'prop:{prop}']['lower'])
-    return lower <= val <=upper
 
-def prepare_dataset(args, prop):
-    embeddings = []
-    labels = []
-    file_path = f'embeddings_{args.llm}_{args.text}_*.csv'
-    if args.input_dir:
-        file_path = os.path.join(args.input_dir, file_path)
-    embed_file = glob.glob(file_path)
-    logging.info(f"Found embedding file: {embed_file}")
-    df_embed = pd.read_csv(embed_file[0], index_col = 0)
-    dat = data('dft_3d')
-    for i in tqdm(dat, desc="Preparing data"):
-        if i[prop]!='na':
-            if in_range(i[prop], prop) or args.raw:
-                if i['jid'] in df_embed.index:
-                    embeddings.append(df_embed.loc[i['jid']].values)
-                    labels.append(i[prop])
-    logging.info(f"Constructed {len(labels)} samples for {prop} property")
-    return embeddings, labels
+
+
    
 # Main function
 def run_regressor(args):
@@ -72,12 +56,14 @@ def run_regressor(args):
     result = defaultdict(list)
     for prop in props:
         X, y = prepare_dataset(args, prop)
+        if args.data_only:
+            continue
         # Split the data into training and testing sets
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=SEED)
 
         # Initialize and fit a linear regression model
         logging.info(f"Started fitting to model")
-        regression_model = RandomForestRegressor(n_jobs = 32) #LinearRegression()
+        regression_model = RandomForestRegressor(n_jobs = 16, n_estimators = 1000) #LinearRegression()
         regression_model.fit(X_train, y_train)
 
         # Predict using the test set
@@ -95,7 +81,8 @@ def run_regressor(args):
         result['mae'].append(mae)
         result['mse'].append(mse)
         df_pred = pd.DataFrame({'labels': y_test, 'predictions': y_pred})
-        df_pred.to_csv(f"./pred/rf_{args.llm}_{args.text}_{prop}.csv")
+        if not args.no_save:
+            df_pred.to_csv(f"./pred/rf_{args.llm.replace('/','_')}_{args.text}_{prop}.csv")
     df_rst = pd.DataFrame.from_dict(result)
     return df_rst
 
@@ -103,8 +90,9 @@ if __name__ == "__main__":
     logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S') 
     df_rst = run_regressor(args)
     filtered_str = '' if args.raw else '_filtered'
-    output_csv = f"rf_{args.llm}_{args.text}_prop_{len(props)}_{filtered_str}.csv"
+    output_csv = f"rf_{args.llm.replace('/','_')}_{args.text}_prop_{len(props)}_{filtered_str}.csv"
     if args.output_dir:
         output_csv = os.path.join(args.output_dir, output_csv)
-    df_rst.to_csv(output_csv)
+    if not args.no_save:
+        df_rst.to_csv(output_csv)
 

@@ -41,7 +41,7 @@ def ensure_dir(dir_path):
     return dir_path
 def get_datasets(test_file_path, args, prop, tokenizer_func, val_ratio = 0.1, test_ratio = 0.1):
     dat = data('dft_3d')
-    df_prop = pd.DataFrame.from_dict(dat)
+    df_prop = pd.DataFrame.from_dict(dat) 
     df_prop = df_prop[df_prop[prop] != 'na'][['jid',prop]]
     if not args.raw:
         df_prop = df_prop[df_prop[prop].apply(lambda x: in_range(x, prop))] 
@@ -131,6 +131,7 @@ def get_trainer(
     training_args = TrainingArguments(
         num_train_epochs=num_epochs,
         output_dir=output_dir,
+        overwrite_output_dir=True,
         per_device_train_batch_size=4,# BERT: 16
         per_device_eval_batch_size=4,# BERT: 16,
         evaluation_strategy="epoch",
@@ -162,7 +163,7 @@ def get_predictions(output):
 
 
 parser = argparse.ArgumentParser(description='Fine tune llm on dataset')
-parser.add_argument('--data_path', help='path to the dataset',default="./text/raw_0_75993.csv", type=str, required=False)
+parser.add_argument('--data_path', help='path to the dataset',default="./text/raw_0_75993.csv", type=str, required=True)
 # parser.add_argument('--input_dir', help='input data directory', default=None, type=str,required=False)
 # parser.add_argument('--input', help='input attributes set', default=None, type=str, required=False)
 parser.add_argument('--text', help='text sources for sample', choices=['raw', 'chemnlp', 'robo'], default='raw', type=str, required=False)
@@ -178,8 +179,12 @@ DEVICE = torch.device("cuda")
 # PROP = "mbj_bandgap"
 # props = ['ehull',
 #        'slme', 'spillage', 'magmom_outcar', "mbj_bandgap"]
-props = ['ehull','slme', 'spillage', 'magmom_outcar', "mbj_bandgap",
-         'formation_energy_peratom', 'Tc_supercon']
+# props = ['ehull','slme', 'spillage', 'magmom_outcar', "mbj_bandgap",
+#          'formation_energy_peratom', 'Tc_supercon']
+# props = ['ehull', 'magmom_outcar', "mbj_bandgap", 'formation_energy_peratom']
+props = ['ehull', 'magmom_outcar', 'formation_energy_peratom']
+
+# props = ['mbj_bandgap']
 MODEL_NAME = args.llm 
 TEXT = args.text
 SEED = 0
@@ -203,11 +208,9 @@ def fine_tune(args):
         model = AutoModelForSequenceClassification.from_config(config=config)
         if MODEL_NAME == 'gpt2':
             model.config.pad_token_id = model.config.eos_token_id
-        model_save_dir = f"./models/fine_tune_{MODEL_NAME}_{PROP}_{TEXT}"
+        model_save_dir = f"./models/fine_tune_{MODEL_NAME.replace('/','_')}_{PROP}_{TEXT}"
 
         optimizer = get_optimizer(model, lr=LEARNING_RATE)
-
-
         trainer = get_trainer(
             train_dataset,
             val_dataset,
@@ -242,7 +245,6 @@ def fine_tune(args):
 
 if __name__ == "__main__":
     logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S')
-    
     df_rst = fine_tune(args)
     filtered_str = '' if args.raw else '_filtered'
     output_csv = f"ft_{args.llm}_{args.text}_prop_{len(props)}_{filtered_str}.csv"
