@@ -31,6 +31,7 @@ parser.add_argument('--start', default=0, type=int,required=False)
 # parser.add_argument('--input', help='input attributes set', default=None, type=str, required=False)
 parser.add_argument('--end', type=int, required=False)
 parser.add_argument('--output_dir', help='path to the save output embedding', default=None, type=str, required=False)
+parser.add_argument('--existing_data', help='path to the existing data', default=None, type=str, required=False)
 args,_ = parser.parse_known_args()
 def get_robo(structure=None):
     describer = StructureDescriber()
@@ -46,22 +47,32 @@ def main(args):
     robo_dic = defaultdict(list)
     robo_err_ct = 0
     end = len(dat)
+    skip_list = []
     if args.end:
         end = min(args.end, len(dat))
+
+    if args.existing_data:
+        df_old = pd.read_csv(args.existing_data, index_col = 0)
+        skip_list = df_old['jid'].tolist()
+    print(skip_list)
     for entry in tqdm(dat[args.start:end], desc="Processing data"):
+        if entry['jid'] in skip_list:
+            print(f"Skipped {entry['jid']}")
+            continue
         try:
             text = get_robo(Atoms.from_dict(entry['atoms']).pymatgen_converter())
             robo_dic['jid'].append(entry['jid'])
             robo_dic['formula'].append(entry['formula'])
             robo_dic['text'].append(text)
-        except Exception as enumerate:
+        except:
             robo_err_ct += 1
-            logging.info(f"Failed text generation count:{robo_err_ct}")
+    logging.info(f"Failed text generation count:{robo_err_ct}")
     df_robo = pd.DataFrame.from_dict(robo_dic)
-    output_file = f"robo_{args.start}_{end}.csv"
+    df_all = pd.concat([df_old, df_robo], ignore_index=True)
+    output_file = f"robo_{args.start}_{end}_err_fixed.csv"
     if args.output_dir:
         output_file = os.path.join(args.output_dir, output_file)
-    df_robo.to_csv(output_file)
+    df_all.to_csv(output_file)
 
 
 # dd=dd[0:100]

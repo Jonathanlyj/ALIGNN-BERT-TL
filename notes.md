@@ -29,3 +29,28 @@ Constructed 901 samples for Tc_supercon property
 
 
 python features.py --llm bert-base-uncased --save_data --text chemnlp --gnn_file_path "/scratch/yll6162/ALIGNNTL/examples/jid/x+y+z/data0.csv" --split_dir "/scratch/yll6162/CrossPropertyTL/llm_data"
+
+
+python features.py --llm bert-base-uncased --save_data --text chemnlp --gnn_file_path "/scratch/yll6162/ALIGNNTL/examples/jid/x+y+z/data0.csv" --split_dir "//data/yll6162/alignntl_dft_3d/dataset/dataset_split_ehull.json"
+
+python features.py --gnn_only --gnn_file_path "/data/yll6162/alignntl_dft_3d/jid/x+y+z/data0.csv" --split_dir "/data/yll6162/alignntl_dft_3d/dataset/dataset_split_ehull.json" --llm bert-base-uncased --save_data --text chemnlp
+
+
+
+
+python preprocess.py --llm bert-base-uncased --text robo  --cache_csv "/scratch/yll6162/atomgpt/text/robo_0_75993_err_fixed.csv" --existing_data "/scratch/yll6162/atomgpt/embeddings/embeddings_bert-base-uncased_robo_51086.csv" --output_dir "./embeddings"
+
+
+
+python features.py --gnn_only --gnn_file_path "/data/yll6162/alignntl_dft_3d/jid/x+y+z/data0.csv" --split_dir "/data/yll6162/alignntl_dft_3d/dataset/dataset_split_ehull.json" --llm bert-base-uncased --save_data --text chemnlp
+
+
+python features.py  --gnn_file_path "/data/yll6162/alignntl_dft_3d/jid/x+y+z/data0.csv" --split_dir "/data/yll6162/alignntl_dft_3d/dataset/dataset_split_ehull.json" --llm bert-base-uncased --save_data --text chemnlp
+
+
+python features.py   --llm bert-base-uncased --save_data --text chemnlp --intersec_file /data/yll6162/alignntl_dft_3d/jid/id_prop_intersec.csv
+
+
+
+
+python features.py  --gnn_file_path "/data/yll6162/alignntl_dft_3d/jid/x+y+z/data0.csv" --split_dir "/data/yll6162/alignntl_dft_3d/dataset/" --llm bert-base-uncased --save_data --text chemnlp
