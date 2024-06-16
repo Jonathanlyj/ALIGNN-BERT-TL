@@ -38,7 +38,7 @@ python features.py --gnn_only --gnn_file_path "/data/yll6162/alignntl_dft_3d/jid
 
 
 
-python preprocess.py --llm bert-base-uncased --text robo  --cache_csv "/scratch/yll6162/atomgpt/text/robo_0_75993_err_fixed.csv" --existing_data "/scratch/yll6162/atomgpt/embeddings/embeddings_bert-base-uncased_robo_51086.csv" --output_dir "./embeddings"
+python preprocess.py --llm bert-base-uncased --text robo  --cache_csv "/scratch/yll6162/atomgpt/text/robo_0_75993_err_fixed.csv" --existing_data "/data/yll6162/alignntl_dft_3d/embeddings/embeddings_bert-base-uncased_robo_51086.csv" --output_dir "/data/yll6162/alignntl_dft_3d/embeddings"
 
 
 
@@ -54,3 +54,18 @@ python features.py   --llm bert-base-uncased --save_data --text chemnlp --inters
 
 
 python features.py  --gnn_file_path "/data/yll6162/alignntl_dft_3d/jid/x+y+z/data0.csv" --split_dir "/data/yll6162/alignntl_dft_3d/dataset/" --llm bert-base-uncased --save_data --text chemnlp
+
+
+python features.py  --gnn_file_path "/data/yll6162/alignntl_dft_3d/jid/x+y+z/data0.csv" --llm matbert-base-cased --save_data --text robo --sample --skip_sentence "summary"
+
+python preprocess.py --llm matbert-base-cased --text chemnlp  --cache_csv "/scratch/yll6162/atomgpt/text/chemnlp_0_75993.csv"  --output_dir "/data/yll6162/alignntl_dft_3d/embeddings"
+
+
+
+python features.py  --gnn_file_path "/data/yll6162/alignntl_dft_3d/jid/x+y+z/data0.csv" --llm matbert-base-cased --save_data --text chemnlp --sample --skip_sentence "structure"
+
+
+python features.py  --gnn_file_path "/data/yll6162/alignntl_dft_3d/jid/x+y+z/data0.csv" --split_dir "/data/yll6162/alignntl_dft_3d/dataset/" --llm matbert-base-cased --save_data --text robo
+
+
+python features.py  --gnn_file_path "/data/yll6162/alignntl_dft_3d/jid/x+y+z/data0.csv" --split_dir "/data/yll6162/alignntl_dft_3d/dataset/" --llm matbert-base-cased --save_data --text robo --skip_sentence summary --sample

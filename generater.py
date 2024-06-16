@@ -35,18 +35,19 @@ parser.add_argument('--start', default=0, type=int,required=False)
 parser.add_argument('--end', type=int, required=False)
 parser.add_argument('--output_dir', help='path to the save output embedding', default=None, type=str, required=False)
 parser.add_argument('--text', help='text sources for sample', choices=['raw', 'chemnlp', 'robo', 'combo'],default='raw', type=str, required=False)
+parser.add_argument('--skip_sentence', help='skip the ith sentence or a specific topic', default="none", required=False)
 args,_ = parser.parse_known_args()
 
-def describe_chemical_data(data):
+def describe_chemical_data(data, skip="none"):
     description = ""
-    if 'chemical_info' in data:
+    if 'chemical_info' in data and skip != 'chemical':
         description += "The chemical information include: "
         chem_info = data['chemical_info']
         description += f"The chemical has an atomic formula of {chem_info.get('atomic_formula', 'N/A')} with a prototype of {chem_info.get('prototype', 'N/A')};"
         description += f"Its molecular weight is {chem_info.get('molecular_weight', 'N/A')} g/mol; "
         description += f"The atomic fractions are {chem_info.get('atomic_fraction', 'N/A')}, and the atomic values X and Z are {chem_info.get('atomic_X', 'N/A')} and {chem_info.get('atomic_Z', 'N/A')}, respectively."
 
-    if 'structure_info' in data:
+    if 'structure_info' in data and skip != 'structure':
         description += "The structure information include: "
         struct_info = data['structure_info']
         description += f"The lattice parameters are {struct_info.get('lattice_parameters', 'N/A')} with angles {struct_info.get('lattice_angles', 'N/A')} degrees; "
@@ -56,7 +57,7 @@ def describe_chemical_data(data):
         description += f"The Wyckoff positions are {struct_info.get('wyckoff', 'N/A')}; "
         description += f"The number of atoms in the primitive and conventional cells are {struct_info.get('natoms_primitive', 'N/A')} and {struct_info.get('natoms_conventional', 'N/A')}, respectively; "
         
-        if 'bond_distances' in struct_info:
+        if 'bond_distances' in struct_info and skip != 'bond':
             bond_distances = struct_info['bond_distances']
             bond_descriptions = ", ".join([f"{bond}: {distance} " for bond, distance in bond_distances.items()])
             description += f"The bond distances are as follows: {bond_descriptions}. "
@@ -189,7 +190,7 @@ def get_text(atoms, text):
     elif text == 'raw':
         return Poscar(atoms).to_string()
     elif text == "chemnlp":
-        return describe_chemical_data(atoms_describer(atoms=atoms))
+        return describe_chemical_data(atoms_describer(atoms=atoms), skip=args.skip_sentence)
     elif text == 'combo':
         return get_crystal_string_t(atoms)
 
@@ -215,7 +216,7 @@ def main(args):
         text_dic['formula'].append(entry['formula'])
         text_dic['text'].append(text)
     df_text = pd.DataFrame.from_dict(text_dic)
-    output_file = f"{args.text}_{args.start}_{end}.csv"
+    output_file = f"{args.text}_{args.start}_{end}_skip_{args.skip_sentence}.csv"
     if args.output_dir:
         output_file = os.path.join(args.output_dir, output_file)
     df_text.to_csv(output_file)

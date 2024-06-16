@@ -30,7 +30,7 @@ props = ['ehull','mbj_bandgap', 'slme', 'spillage', 'magmom_outcar','formation_e
 
 parser = argparse.ArgumentParser(description='run ml regressors on dataset')
 # parser.add_argument('--data_path', help='path to the dataset',default=None, type=str, required=False)
-parser.add_argument('--input_dir', help='input data directory', default="./embeddings", type=str,required=False)
+parser.add_argument('--input_dir', help='input data directory', default="/data/yll6162/alignntl_dft_3d/embeddings", type=str,required=False)
 # parser.add_argument('--input', help='input attributes set', default=None, type=str, required=False)
 parser.add_argument('--text', help='text sources for sample', choices=['raw', 'chemnlp', 'robo'], default='raw', type=str, required=False)
 parser.add_argument('--llm', help='pre-trained llm to use', default='gpt2', type=str,required=False)

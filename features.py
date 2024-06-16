@@ -20,10 +20,10 @@ import os
 import pandas as pd
 from collections import defaultdict
 import configparser
-
+import re
 
 SEED = 1
-# props = ['ehull', 'formation_energy_peratom', 'mbj_bandgap', 'slme', 'spillage', 'magmom_outcar', 'Tc_supercon']
+# props = ['formation_energy_peratom', 'ehull', 'mbj_bandgap', 'slme', 'spillage', 'magmom_outcar', 'Tc_supercon']
 # props = ['ehull','mbj_bandgap', 'slme', 'spillage', 'magmom_outcar', 'Tc_supercon']
 # props = ['ehull', 'formation_energy_peratom']
 props = ['formation_energy_peratom']
@@ -31,7 +31,7 @@ props = ['formation_energy_peratom']
 
 parser = argparse.ArgumentParser(description='run ml regressors on dataset')
 # parser.add_argument('--data_path', help='path to the dataset',default=None, type=str, required=False)
-parser.add_argument('--input_dir', help='input data directory', default="./embeddings", type=str,required=False)
+parser.add_argument('--input_dir', help='input data directory', default="/data/yll6162/alignntl_dft_3d/embeddings", type=str,required=False)
 # parser.add_argument('--input', help='input attributes set', default=None, type=str, required=False)
 parser.add_argument('--text', help='text sources for sample', choices=['raw', 'chemnlp', 'robo', 'combo'], default='raw', type=str, required=False)
 parser.add_argument('--llm', help='pre-trained llm to use', default='gpt2', type=str,required=False)
@@ -40,10 +40,15 @@ parser.add_argument('--save_data', action='store_true')
 parser.add_argument('--gnn_only', action='store_true')
 parser.add_argument('--gnn_file_path', type=str, required=False)
 parser.add_argument('--split_dir', type=str, required=False)
-parser.add_argument('--intersec_file', type=str, required=False)
+parser.add_argument('--sample', action='store_true')
+parser.add_argument('--skip_sentence', help='skip the ith sentence', default=None, required=False)
+parser.add_argument('--mask_words', help='skip the ith word', default=None, required=False)
+
 args =  parser.parse_args()
 config = configparser.ConfigParser()
 config.read('config.ini')
+
+selected_samples = ["JVASP-1151"]
 
 def in_range(val, prop):
     upper = float(config[f'prop:{prop}']['upper'])
@@ -54,29 +59,37 @@ def prepare_dataset(args, prop):
     embeddings = []
     labels = []
     file_path = f"embeddings_{args.llm.replace('/', '_')}_{args.text}_*.csv"
-    print(file_path)
+    if args.skip_sentence is not None:
+        file_path = f"embeddings_{args.llm.replace('/', '_')}_{args.text}_skip_{args.skip_sentence}*.csv"
+    if args.mask_words is not None:
+        file_path = f"embeddings_{args.llm.replace('/', '_')}_{args.text}_mask_{args.mask_words}*.csv"
     if args.input_dir:
         file_path = os.path.join(args.input_dir, file_path)
-    
     embed_file = glob.glob(file_path)
+
     if len(embed_file)>1:
+        if args.skip_sentence is None and args.mask_words is None:
+            pattern_str = rf".*embeddings_{args.llm.replace('/', '_')}_{args.text}_(\d+)"
+            pattern = re.compile(pattern_str)
+            embed_file = [file for file in embed_file if pattern.match(file)]
         latest_file = max(embed_file, key=os.path.getctime)
         print("Latest file:", latest_file)
         embed_file = [latest_file]
+    
     logging.info(f"Found embedding file: {embed_file}")
     df_embed = pd.read_csv(embed_file[0], index_col = 0)
     dat = data('dft_3d')
     ids = []
-    if args.intersec_file:
-        df_ids_interec = pd.read_csv(args.intersec_file)
-        print(df_ids_interec.head())
-        intersec_ids = df_ids_interec['jid'].values
+    # SELECT test only
+    json_path = f"/data/yll6162/alignntl_dft_3d/dataset/dataset_split_{prop}.json"
+    with open(json_path, 'r') as json_file: 
+        ids_dict = json.load(json_file)
+    selected_samples = ids_dict['id_test']
     for i in tqdm(dat, desc="Preparing data"):
+        if args.sample:
+            if i['jid'] not in selected_samples:
+                continue
         if i[prop]!='na':
-            if args.intersec_file:
-                if i['jid'] not in intersec_ids:
-                    continue
-                
             if in_range(i[prop], prop) or args.raw:
                 if i['jid'] in df_embed.index:
                     embeddings.append(df_embed.loc[i['jid']].values)
@@ -90,15 +103,21 @@ def prepare_dataset(args, prop):
         df_data[prop] = labels
         df_data["ids"] = ids
         dataset_filename = f"dataset_{args.llm.replace('/', '_')}_{args.text}_prop_{prop}"
-        dataset_path = f"./data/{dataset_filename}"
+        if args.skip_sentence is not None:
+            dataset_filename = f"dataset_{args.llm.replace('/', '_')}_{args.text}_skip_{args.skip_sentence}_prop_{prop}"
+        if args.mask_words is not None:
+            dataset_filename = f"dataset_{args.llm.replace('/', '_')}_{args.text}_mask_{args.mask_words}_prop_{prop}"
+        dataset_path = f"/data/yll6162/alignntl_dft_3d/tl_dataset/{dataset_filename}"
         df_data['ids'] = df_data['ids'] + '.vasp'
         if args.gnn_file_path:
             df_gnn = pd.read_csv(args.gnn_file_path)
-            dataset_path = f"./data/dataset_alignn_{args.llm.replace('/', '_')}_{args.text}_prop_{prop}"
+            # dataset_path = f"/data/yll6162/alignntl_dft_3d/tl_dataset/dataset_alignn_{args.llm.replace('/', '_')}_{args.text}_prop_{prop}"
+            dataset_path = dataset_path.replace("dataset_", "dataset_alignn_")
             if args.gnn_only:
                 df_gnn = pd.read_csv(args.gnn_file_path)
                 df_gnn['id'] = df_gnn['id'] + '.vasp'
-                dataset_path = f"./data/alignn_prop_{prop}"
+                # dataset_path = f"/data/yll6162/alignntl_dft_3d/tl_dataset/alignn_prop_{prop}"
+                dataset_path = dataset_path.replace("dataset_alignn", "alignn")
                 df_data = df_data[[prop, "ids"]].merge(df_gnn, how='inner', left_on="ids", right_on="id", suffixes=('_lm', '_gnn'))
             else:
                 df_gnn['id'] = df_gnn['id'] + '.vasp'
@@ -130,7 +149,7 @@ def prepare_dataset(args, prop):
         else:
             logging.info(f"Constructed {df_data.shape[0]} samples for {prop} property")
             df_data.to_csv(f"{dataset_path}.csv")
-            logging.info(f"Saved dataset to {dataset_path}")
+            logging.info(f"Saved dataset to {dataset_path}.csv")
 
     return embeddings, labels
 
@@ -138,5 +157,4 @@ if __name__ == "__main__":
     logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S') 
     for prop in props:
         prepare_dataset(args, prop)
-
 

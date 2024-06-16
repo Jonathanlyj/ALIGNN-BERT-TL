@@ -27,6 +27,11 @@ from jarvis.analysis.structure.spacegroup import Spacegroup3D
 from jarvis.analysis.diffraction.xrd import XRD
 from jarvis.core.specie import Specie
 from collections import defaultdict
+import nltk
+import re
+nltk.download('punkt')
+
+
 print(transformers.__version__)
 SEED = 1
 
@@ -39,8 +44,90 @@ parser.add_argument('--llm', help='pre-trained llm to use', default='gpt2', type
 parser.add_argument('--output_dir', help='path to the save output embedding', default=None, type=str, required=False)
 parser.add_argument('--cache_csv', help='path that stores text', default=None, type=str, required=False)
 parser.add_argument('--existing_data', help='path that stores existing embeddings', default=None, type=str, required=False)
+parser.add_argument('--skip_sentence', help='skip the ith sentence', default=None, required=False)
+parser.add_argument('--mask_words', action='store_true', help='use cpu only', required=False)
+parser.add_argument('--sample', action='store_true', help='save samples from lists only', required=False)
 parser.add_argument('--cpu', action='store_true', help='use cpu only', required=False)
 args,_ = parser.parse_known_args()
+
+selected_samples = ["JVASP-1151"]
+# words_index = [2,10]
+# words_index = [31]
+# words_index = [37]
+# words_index = [44]
+words_index = [60]
+
+
+def extract_chemnlp(text):
+    # Split text into sections based on the starting phrases
+    sections = re.split(r'(The chemical information include|The structure information include|The bond distances are)', text)
+
+    # Remove empty strings and clean up whitespace
+    sections = [section.strip() for section in sections if section.strip()]
+    combined_data = []
+    for i in range(0, len(sections), 2):
+        combined_data.append(sections[i] + sections[i + 1])
+
+    return combined_data
+
+def mask_words(sentence: str, indexes: list) -> str:
+    # Regular expression to match words and punctuation
+    words = sentence.split()
+    
+    # Replace words at specified indexes with [MASK]
+    for index in indexes:
+        if 0 <= index < len(words):
+            words[index] = '[MASK]'
+    
+    # Join the words back into a single string, ensuring spaces are added appropriately
+    return ' '.join(words)
+
+
+def remove_sentence_by_index(input_string, criteria, input_type=None):
+    filtered_sentences = []
+    if input_type=="robo":
+        sentences = nltk.sent_tokenize(input_string)
+        
+        if type(criteria) == int: 
+            filtered_sentences = [sent.strip() for i, sent in enumerate(sentences) if i != criteria]
+            return ' '.join(filtered_sentences)
+        else:
+            assert criteria in ['summary', 'site', 'bond', 'length', 'angle']
+
+            for i, sent in enumerate(sentences):
+                if criteria == 'summary' and (i == 0 or ('structure' in sent.lower() and i == 1)):
+                    # Skip the first sentence (summary sentence)
+                    continue
+                if criteria == 'site' and 'sites' in sent.lower() and 'there are' in sent.lower():
+                    # Skip sentences containing 'sites' (site info)
+                    continue
+                if criteria == 'bond' and 'bonded' in sent.lower():
+                    # Skip sentences containing 'bonded' (bond description)
+                    continue
+                if criteria == 'length' and ('bond length' in sent.lower() or 'bond distance' in sent.lower()):
+                    # Skip sentences containing 'bond lengths' (bond lengths)
+                    continue
+                if criteria == 'angle' and ('tilt' in sent.lower() or 'angle' in sent.lower()):
+                    continue
+                filtered_sentences.append(sent.strip())
+
+    elif input_type=="chemnlp":
+        assert criteria in ['structure', 'chemical', 'bond']
+        sentences = extract_chemnlp(input_string)
+        for i, sent in enumerate(sentences):
+            if criteria == 'structure' and sent.startswith('The structure information include:'):
+                # Skip the first sentence (summary sentence)
+                continue
+            if criteria == 'chemical' and sent.startswith('The chemical information include:'):
+                # Skip sentences containing 'lattice' (lattice info)
+                continue
+            if criteria == 'bond' and sent.startswith('The bond distances are as follows:'):
+                # Skip sentences containing 'atoms' (atoms info)
+                continue
+            filtered_sentences.append(sent.strip())
+        return ' '.join(filtered_sentences)
+
+        
 
 
 def get_crystal_string_t(atoms):
@@ -202,8 +289,6 @@ def preprocess_data(args):
             quantization_config=quantization_config
         )
 
-
-    print(model.get_memory_footprint())
     model.to(device)
     embeddings = []
     samples=[]
@@ -216,6 +301,9 @@ def preprocess_data(args):
     if args.existing_data:
         df_old = pd.read_csv(args.existing_data, index_col = 0)
     for entry in tqdm(dat, desc="Processing data"):
+        if args.sample:
+            if entry['jid'] not in selected_samples:
+                continue
         if args.existing_data and entry['jid'] in df_old.index:
             continue
         if args.cache_csv:
@@ -235,6 +323,12 @@ def preprocess_data(args):
                     pass
             elif args.text == "combo":
                 text = get_crystal_string_t(Atoms.from_dict(entry['atoms']))
+
+        if args.skip_sentence is not None:
+            text = remove_sentence_by_index(text, args.skip_sentence, args.text)
+        elif args.mask_words:
+            text = mask_words(text, words_index)
+            print(text)
         inputs = tokenizer(text, max_length=512, truncation=True, return_tensors="pt").to(device)
         if len(inputs['input_ids'][0]) <= max_token_length:
             with torch.no_grad():
@@ -246,7 +340,6 @@ def preprocess_data(args):
                 emb = output.last_hidden_state.mean(dim=1).numpy().flatten()
             embeddings.append(emb)
             samples.append(entry['jid'])
-
 
     embeddings = np.vstack(embeddings)
     #labels = np.array([entry['exfoliation_energy'] for entry in dat])
@@ -273,6 +366,10 @@ def save_data(embeddings, samples):
 
     n = len(df)
     file_path = f"embeddings_{args.llm.replace('/', '_')}_{args.text}_{n}_err_fixed.csv"
+    if args.skip_sentence is not None:
+        file_path = f"embeddings_{args.llm.replace('/', '_')}_{args.text}_skip_{args.skip_sentence}_{n}_err_fixed.csv"
+    if args.mask_words:
+        file_path = f"embeddings_{args.llm.replace('/', '_')}_{args.text}_mask_{words_index[0]}_{n}_err_fixed.csv"
     if args.output_dir:
         file_path = os.path.join(args.output_dir, file_path) 
     df.to_csv(file_path)

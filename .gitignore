@@ -4,3 +4,4 @@ chemnlp/
 eda*
 models/
 *vscode/
+*.png
